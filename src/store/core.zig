@@ -107,18 +107,20 @@ pub const MemoryCache = struct {
     
     /// Evict expired entries
     pub fn evictExpired(self: *MemoryCache) void {
-        var to_remove = std.ArrayList([]const u8).init(self.allocator);
+        var to_remove = std.ArrayList([]const u8){};
         defer {
             for (to_remove.items) |key| {
                 self.allocator.free(key);
             }
-            to_remove.deinit();
+            to_remove.deinit(self.allocator);
         }
         
         var iterator = self.entries.iterator();
         while (iterator.next()) |entry| {
             if (entry.value_ptr.isExpired()) {
-                to_remove.append(try self.allocator.dupe(u8, entry.key_ptr.*)) catch continue;
+                if (self.allocator.dupe(u8, entry.key_ptr.*)) |key_copy| {
+                    to_remove.append(self.allocator, key_copy) catch continue;
+                } else |_| continue;
             }
         }
         
@@ -134,12 +136,12 @@ pub const MemoryCache = struct {
         
         // If still at capacity, remove some entries (simplified LRU)
         if (self.entries.count() >= self.max_size) {
-            var to_remove = std.ArrayList([]const u8).init(self.allocator);
+            var to_remove = std.ArrayList([]const u8){};
             defer {
                 for (to_remove.items) |key| {
                     self.allocator.free(key);
                 }
-                to_remove.deinit();
+                to_remove.deinit(self.allocator);
             }
             
             var iterator = self.entries.iterator();
@@ -148,7 +150,7 @@ pub const MemoryCache = struct {
             
             while (iterator.next()) |entry| {
                 if (count >= max_to_remove) break;
-                try to_remove.append(try self.allocator.dupe(u8, entry.key_ptr.*));
+                try to_remove.append(self.allocator, try self.allocator.dupe(u8, entry.key_ptr.*));
                 count += 1;
             }
             

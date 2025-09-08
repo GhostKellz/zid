@@ -142,7 +142,8 @@ pub const JwtPayload = struct {
         var iterator = self.custom_claims.iterator();
         while (iterator.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
-            entry.value_ptr.deinit();
+            // Note: std.json.Value doesn't have deinit in Zig 0.16
+            // Custom claims cleanup would need to be handled differently
         }
         self.custom_claims.deinit(self.allocator);
     }
@@ -548,58 +549,58 @@ pub const JwtBuilder = struct {
     
     fn serializePayload(payload: *const JwtPayload) ![]u8 {
         // Simple JSON serialization - in production use proper JSON library
-        var json = std.ArrayList(u8).init(payload.allocator);
-        defer json.deinit();
+        var json = std.ArrayList(u8){};
+        defer json.deinit(payload.allocator);
         
-        try json.append('{');
+        try json.append(payload.allocator, '{');
         
         var first = true;
         
         if (payload.iss) |iss| {
-            if (!first) try json.append(',');
-            try json.appendSlice(try std.fmt.allocPrint(payload.allocator, "\"iss\":\"{s}\"", .{iss}));
+            if (!first) try json.append(payload.allocator, ',');
+            try json.appendSlice(payload.allocator, try std.fmt.allocPrint(payload.allocator, "\"iss\":\"{s}\"", .{iss}));
             first = false;
         }
         
         if (payload.sub) |sub| {
-            if (!first) try json.append(',');
-            try json.appendSlice(try std.fmt.allocPrint(payload.allocator, "\"sub\":\"{s}\"", .{sub}));
+            if (!first) try json.append(payload.allocator, ',');
+            try json.appendSlice(payload.allocator, try std.fmt.allocPrint(payload.allocator, "\"sub\":\"{s}\"", .{sub}));
             first = false;
         }
         
         if (payload.aud) |aud| {
-            if (!first) try json.append(',');
-            try json.appendSlice(try std.fmt.allocPrint(payload.allocator, "\"aud\":\"{s}\"", .{aud}));
+            if (!first) try json.append(payload.allocator, ',');
+            try json.appendSlice(payload.allocator, try std.fmt.allocPrint(payload.allocator, "\"aud\":\"{s}\"", .{aud}));
             first = false;
         }
         
         if (payload.exp) |exp| {
-            if (!first) try json.append(',');
-            try json.appendSlice(try std.fmt.allocPrint(payload.allocator, "\"exp\":{}", .{exp}));
+            if (!first) try json.append(payload.allocator, ',');
+            try json.appendSlice(payload.allocator, try std.fmt.allocPrint(payload.allocator, "\"exp\":{}", .{exp}));
             first = false;
         }
         
         if (payload.nbf) |nbf| {
-            if (!first) try json.append(',');
-            try json.appendSlice(try std.fmt.allocPrint(payload.allocator, "\"nbf\":{}", .{nbf}));
+            if (!first) try json.append(payload.allocator, ',');
+            try json.appendSlice(payload.allocator, try std.fmt.allocPrint(payload.allocator, "\"nbf\":{}", .{nbf}));
             first = false;
         }
         
         if (payload.iat) |iat| {
-            if (!first) try json.append(',');
-            try json.appendSlice(try std.fmt.allocPrint(payload.allocator, "\"iat\":{}", .{iat}));
+            if (!first) try json.append(payload.allocator, ',');
+            try json.appendSlice(payload.allocator, try std.fmt.allocPrint(payload.allocator, "\"iat\":{}", .{iat}));
             first = false;
         }
         
         if (payload.jti) |jti| {
-            if (!first) try json.append(',');
-            try json.appendSlice(try std.fmt.allocPrint(payload.allocator, "\"jti\":\"{s}\"", .{jti}));
+            if (!first) try json.append(payload.allocator, ',');
+            try json.appendSlice(payload.allocator, try std.fmt.allocPrint(payload.allocator, "\"jti\":\"{s}\"", .{jti}));
             first = false;
         }
         
-        try json.append('}');
+        try json.append(payload.allocator, '}');
         
-        return json.toOwnedSlice();
+        return try json.toOwnedSlice(payload.allocator);
     }
 };
 

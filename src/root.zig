@@ -26,6 +26,11 @@ pub const saml = @import("saml/core.zig");
 pub const store = @import("store/core.zig");
 pub const time = @import("time/core.zig");
 
+// New integration modules
+pub const config = @import("config/env.zig");
+pub const presets = @import("presets/providers.zig");
+pub const quick = @import("helpers/quick.zig");
+
 // Re-export commonly used types and functions
 pub const Client = oauth.Client;
 pub const OidcClient = oidc.Client;
@@ -85,6 +90,32 @@ pub const ZidError = error{
 
 // Async support with zsync (when available)
 pub const async_support = @hasDecl(std, "event") or @hasDecl(std, "Thread");
+
+// Convenience functions for easy setup
+/// Quick setup from .env file
+pub fn setupFromEnv(allocator: std.mem.Allocator) !quick.QuickSSO {
+    return try quick.QuickSSO.fromEnv(allocator, ".env");
+}
+
+/// Load configuration from .env file
+pub fn loadFromEnv(allocator: std.mem.Allocator, env_file_path: ?[]const u8) !Config {
+    return try config.loadConfig(allocator, env_file_path);
+}
+
+/// Quick Google SSO setup
+pub fn setupGoogle(allocator: std.mem.Allocator, client_id: []const u8, client_secret: []const u8, redirect_uri: []const u8) !quick.QuickSSO {
+    return try quick.QuickSSO.google(allocator, client_id, client_secret, redirect_uri);
+}
+
+/// Quick Azure AD SSO setup
+pub fn setupAzureAD(allocator: std.mem.Allocator, tenant_id: []const u8, client_id: []const u8, client_secret: []const u8, redirect_uri: []const u8) !quick.QuickSSO {
+    return try quick.QuickSSO.azureAD(allocator, tenant_id, client_id, client_secret, redirect_uri);
+}
+
+/// Quick GitHub SSO setup
+pub fn setupGitHub(allocator: std.mem.Allocator, client_id: []const u8, client_secret: []const u8, redirect_uri: []const u8) !quick.QuickSSO {
+    return try quick.QuickSSO.github(allocator, client_id, client_secret, redirect_uri);
+}
 
 test "zid module structure" {
     const testing = std.testing;

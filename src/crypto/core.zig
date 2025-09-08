@@ -272,24 +272,30 @@ pub const Crypto = struct {
     fn signHmac(self: *const Crypto, data: []const u8, key: Key.HmacKey, algorithm: Algorithm) ![]u8 {
         switch (algorithm) {
             .HS256 => {
-                var mac = std.crypto.auth.hmac.HmacSha256.init(key.secret);
+                var mac = std.crypto.auth.hmac.sha2.HmacSha256.init(key.secret);
                 mac.update(data);
+                var hash: [32]u8 = undefined;
+                mac.final(&hash);
                 const result = try self.allocator.alloc(u8, 32);
-                mac.final(result);
+                @memcpy(result, &hash);
                 return result;
             },
             .HS384 => {
-                var mac = std.crypto.auth.hmac.HmacSha384.init(key.secret);
+                var mac = std.crypto.auth.hmac.sha2.HmacSha384.init(key.secret);
                 mac.update(data);
+                var hash: [48]u8 = undefined;
+                mac.final(&hash);
                 const result = try self.allocator.alloc(u8, 48);
-                mac.final(result);
+                @memcpy(result, &hash);
                 return result;
             },
             .HS512 => {
-                var mac = std.crypto.auth.hmac.HmacSha512.init(key.secret);
+                var mac = std.crypto.auth.hmac.sha2.HmacSha512.init(key.secret);
                 mac.update(data);
+                var hash: [64]u8 = undefined;
+                mac.final(&hash);
                 const result = try self.allocator.alloc(u8, 64);
-                mac.final(result);
+                @memcpy(result, &hash);
                 return result;
             },
             else => return error.InvalidAlgorithm,
@@ -306,7 +312,12 @@ pub const Crypto = struct {
             return false;
         }
         
-        return std.crypto.utils.timingSafeEql([*]const u8, signature.ptr, expected_signature.ptr, signature.len);
+        // Simple constant-time comparison 
+        var result: u8 = 0;
+        for (signature, expected_signature) |a, b| {
+            result |= a ^ b;
+        }
+        return result == 0;
     }
     
     /// RSA signing implementation (placeholder - would need actual RSA implementation)
@@ -359,12 +370,12 @@ pub const Crypto = struct {
         
         const key_pair = std.crypto.sign.Ed25519.KeyPair{
             .public_key = std.crypto.sign.Ed25519.PublicKey{ .bytes = key.public_key },
-            .secret_key = std.crypto.sign.Ed25519.SecretKey{ .bytes = key.private_key.?[0..32].* },
+            .secret_key = std.crypto.sign.Ed25519.SecretKey{ .bytes = key.private_key.? },
         };
         
         const signature = try key_pair.sign(data, null);
         const result = try self.allocator.alloc(u8, 64);
-        @memcpy(result, &signature.bytes);
+        @memcpy(result, std.mem.asBytes(&signature));
         return result;
     }
     
@@ -375,9 +386,9 @@ pub const Crypto = struct {
         if (signature.len != 64) return false;
         
         const public_key = std.crypto.sign.Ed25519.PublicKey{ .bytes = key.public_key };
-        const sig = std.crypto.sign.Ed25519.Signature{ .bytes = signature[0..64].* };
+        const sig = std.crypto.sign.Ed25519.Signature.fromBytes(signature[0..64].*);
         
-        public_key.verify(sig, data, null) catch return false;
+        sig.verify(data, public_key) catch return false;
         return true;
     }
 };

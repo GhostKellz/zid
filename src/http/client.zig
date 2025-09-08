@@ -264,20 +264,20 @@ pub const Client = struct {
         }
         
         // Read response body
-        var response_body = std.ArrayList(u8).init(self.allocator);
-        defer response_body.deinit();
+        var response_body = std.ArrayList(u8){};
+        defer response_body.deinit(self.allocator);
         
         var buffer: [8192]u8 = undefined;
         while (true) {
             const bytes_read = try http_request.readAll(&buffer);
             if (bytes_read == 0) break;
-            try response_body.appendSlice(buffer[0..bytes_read]);
+            try response_body.appendSlice(self.allocator, buffer[0..bytes_read]);
         }
         
         return Response{
             .status_code = @intCast(http_request.response.status.phrase().len), // Simplified
             .headers = response_headers,
-            .body = try response_body.toOwnedSlice(),
+            .body = try response_body.toOwnedSlice(self.allocator),
             .allocator = self.allocator,
         };
     }
@@ -320,26 +320,28 @@ fn base64Encode(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
 
 /// URL encode helper for form data
 pub fn urlEncode(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
-    var encoded = std.ArrayList(u8){ .allocator = allocator, .items = &.{}, .capacity = 0 };
-    defer encoded.deinit();
+    var encoded = std.ArrayList(u8){};
+    defer encoded.deinit(allocator);
     
     for (input) |byte| {
         switch (byte) {
             'A'...'Z', 'a'...'z', '0'...'9', '-', '.', '_', '~' => {
-                try encoded.append(byte);
+                try encoded.append(allocator, byte);
             },
-            ' ' => try encoded.append('+'),
+            ' ' => try encoded.append(allocator, '+'),
             else => {
-                try encoded.appendSlice(try std.fmt.allocPrint(
+                const hex = try std.fmt.allocPrint(
                     allocator,
                     "%{X:0>2}",
                     .{byte}
-                ));
+                );
+                defer allocator.free(hex);
+                try encoded.appendSlice(allocator, hex);
             },
         }
     }
     
-    return encoded.toOwnedSlice();
+    return try encoded.toOwnedSlice(allocator);
 }
 
 /// Build URL with query parameters
@@ -348,26 +350,26 @@ pub fn buildUrl(allocator: std.mem.Allocator, base_url: []const u8, params: []co
         return try allocator.dupe(u8, base_url);
     }
     
-    var url = std.ArrayList(u8).init(allocator);
-    defer url.deinit();
+    var url = std.ArrayList(u8){};
+    defer url.deinit(allocator);
     
-    try url.appendSlice(base_url);
-    try url.append('?');
+    try url.appendSlice(allocator, base_url);
+    try url.append(allocator, '?');
     
     for (params, 0..) |param, i| {
-        if (i > 0) try url.append('&');
+        if (i > 0) try url.append(allocator, '&');
         
         const encoded_key = try urlEncode(allocator, param.key);
         defer allocator.free(encoded_key);
         const encoded_value = try urlEncode(allocator, param.value);
         defer allocator.free(encoded_value);
         
-        try url.appendSlice(encoded_key);
-        try url.append('=');
-        try url.appendSlice(encoded_value);
+        try url.appendSlice(allocator, encoded_key);
+        try url.append(allocator, '=');
+        try url.appendSlice(allocator, encoded_value);
     }
     
-    return url.toOwnedSlice();
+    return try url.toOwnedSlice(allocator);
 }
 
 pub const QueryParam = struct {

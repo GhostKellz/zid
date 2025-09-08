@@ -637,8 +637,8 @@ test "saml authn request generation" {
     defer allocator.free(redirect_url);
     
     // URL should contain SAMLRequest parameter
-    try testing.expect(std.mem.contains(u8, redirect_url, "SAMLRequest="));
-    try testing.expect(std.mem.contains(u8, redirect_url, "RelayState="));
+    try testing.expect(std.mem.indexOf(u8, redirect_url, "SAMLRequest=") != null);
+    try testing.expect(std.mem.indexOf(u8, redirect_url, "RelayState=") != null);
 }
 
 test "saml response structure" {

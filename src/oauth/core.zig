@@ -214,30 +214,30 @@ pub const Client = struct {
     
     /// Build authorization URL for Authorization Code flow
     pub fn buildAuthorizationUrl(self: *const Client, state: ?[]const u8, pkce: ?*const Pkce) ![]u8 {
-        var params = std.ArrayList(http.QueryParam).init(self.allocator);
-        defer params.deinit();
+        var params = std.ArrayList(http.QueryParam){};
+        defer params.deinit(self.allocator);
         
         // Required parameters
-        try params.append(.{ .key = "response_type", .value = ResponseType.code.toString() });
-        try params.append(.{ .key = "client_id", .value = self.config.client_id });
-        try params.append(.{ .key = "redirect_uri", .value = self.config.redirect_uri });
+        try params.append(self.allocator, .{ .key = "response_type", .value = ResponseType.code.toString() });
+        try params.append(self.allocator, .{ .key = "client_id", .value = self.config.client_id });
+        try params.append(self.allocator, .{ .key = "redirect_uri", .value = self.config.redirect_uri });
         
         // Scopes
         if (self.config.scopes.len > 0) {
             const scope_str = try std.mem.join(self.allocator, " ", self.config.scopes);
             defer self.allocator.free(scope_str);
-            try params.append(.{ .key = "scope", .value = scope_str });
+            try params.append(self.allocator, .{ .key = "scope", .value = scope_str });
         }
         
         // State for CSRF protection
         if (state) |s| {
-            try params.append(.{ .key = "state", .value = s });
+            try params.append(self.allocator, .{ .key = "state", .value = s });
         }
         
         // PKCE parameters
         if (pkce) |p| {
-            try params.append(.{ .key = "code_challenge", .value = p.code_challenge });
-            try params.append(.{ .key = "code_challenge_method", .value = p.code_challenge_method.toString() });
+            try params.append(self.allocator, .{ .key = "code_challenge", .value = p.code_challenge });
+            try params.append(self.allocator, .{ .key = "code_challenge_method", .value = p.code_challenge_method.toString() });
         }
         
         return try http.buildUrl(self.allocator, self.config.authorization_endpoint, params.items);
@@ -249,34 +249,34 @@ pub const Client = struct {
         _ = state;
         
         // Build form data
-        var form_data = std.ArrayList(u8).init(self.allocator);
-        defer form_data.deinit();
+        var form_data = std.ArrayList(u8){};
+        defer form_data.deinit(self.allocator);
         
-        try form_data.appendSlice("grant_type=");
-        try form_data.appendSlice(GrantType.authorization_code.toString());
-        try form_data.appendSlice("&code=");
+        try form_data.appendSlice(self.allocator, "grant_type=");
+        try form_data.appendSlice(self.allocator, GrantType.authorization_code.toString());
+        try form_data.appendSlice(self.allocator, "&code=");
         const encoded_code = try http.urlEncode(self.allocator, code);
         defer self.allocator.free(encoded_code);
-        try form_data.appendSlice(encoded_code);
-        try form_data.appendSlice("&redirect_uri=");
+        try form_data.appendSlice(self.allocator, encoded_code);
+        try form_data.appendSlice(self.allocator, "&redirect_uri=");
         const encoded_redirect = try http.urlEncode(self.allocator, self.config.redirect_uri);
         defer self.allocator.free(encoded_redirect);
-        try form_data.appendSlice(encoded_redirect);
-        try form_data.appendSlice("&client_id=");
-        try form_data.appendSlice(self.config.client_id);
+        try form_data.appendSlice(self.allocator, encoded_redirect);
+        try form_data.appendSlice(self.allocator, "&client_id=");
+        try form_data.appendSlice(self.allocator, self.config.client_id);
         
         // Add client secret if available
         if (self.config.client_secret) |secret| {
-            try form_data.appendSlice("&client_secret=");
+            try form_data.appendSlice(self.allocator, "&client_secret=");
             const encoded_secret = try http.urlEncode(self.allocator, secret);
             defer self.allocator.free(encoded_secret);
-            try form_data.appendSlice(encoded_secret);
+            try form_data.appendSlice(self.allocator, encoded_secret);
         }
         
         // Add PKCE verifier
         if (pkce) |p| {
-            try form_data.appendSlice("&code_verifier=");
-            try form_data.appendSlice(p.code_verifier);
+            try form_data.appendSlice(self.allocator, "&code_verifier=");
+            try form_data.appendSlice(self.allocator, p.code_verifier);
         }
         
         // Make request
@@ -298,23 +298,23 @@ pub const Client = struct {
         }
         
         // Build form data
-        var form_data = std.ArrayList(u8).init(self.allocator);
-        defer form_data.deinit();
+        var form_data = std.ArrayList(u8){};
+        defer form_data.deinit(self.allocator);
         
-        try form_data.appendSlice("grant_type=");
-        try form_data.appendSlice(GrantType.client_credentials.toString());
-        try form_data.appendSlice("&client_id=");
-        try form_data.appendSlice(self.config.client_id);
-        try form_data.appendSlice("&client_secret=");
+        try form_data.appendSlice(self.allocator, "grant_type=");
+        try form_data.appendSlice(self.allocator, GrantType.client_credentials.toString());
+        try form_data.appendSlice(self.allocator, "&client_id=");
+        try form_data.appendSlice(self.allocator, self.config.client_id);
+        try form_data.appendSlice(self.allocator, "&client_secret=");
         const encoded_secret = try http.urlEncode(self.allocator, self.config.client_secret.?);
         defer self.allocator.free(encoded_secret);
-        try form_data.appendSlice(encoded_secret);
+        try form_data.appendSlice(self.allocator, encoded_secret);
         
         if (scope) |s| {
-            try form_data.appendSlice("&scope=");
+            try form_data.appendSlice(self.allocator, "&scope=");
             const encoded_scope = try http.urlEncode(self.allocator, s);
             defer self.allocator.free(encoded_scope);
-            try form_data.appendSlice(encoded_scope);
+            try form_data.appendSlice(self.allocator, encoded_scope);
         }
         
         // Make request
@@ -331,23 +331,23 @@ pub const Client = struct {
     /// Refresh access token using refresh token
     pub fn refreshToken(self: *const Client, refresh_token: []const u8) !TokenResponse {
         // Build form data
-        var form_data = std.ArrayList(u8).init(self.allocator);
-        defer form_data.deinit();
+        var form_data = std.ArrayList(u8){};
+        defer form_data.deinit(self.allocator);
         
-        try form_data.appendSlice("grant_type=");
-        try form_data.appendSlice(GrantType.refresh_token.toString());
-        try form_data.appendSlice("&refresh_token=");
+        try form_data.appendSlice(self.allocator, "grant_type=");
+        try form_data.appendSlice(self.allocator, GrantType.refresh_token.toString());
+        try form_data.appendSlice(self.allocator, "&refresh_token=");
         const encoded_refresh = try http.urlEncode(self.allocator, refresh_token);
         defer self.allocator.free(encoded_refresh);
-        try form_data.appendSlice(encoded_refresh);
-        try form_data.appendSlice("&client_id=");
-        try form_data.appendSlice(self.config.client_id);
+        try form_data.appendSlice(self.allocator, encoded_refresh);
+        try form_data.appendSlice(self.allocator, "&client_id=");
+        try form_data.appendSlice(self.allocator, self.config.client_id);
         
         if (self.config.client_secret) |secret| {
-            try form_data.appendSlice("&client_secret=");
+            try form_data.appendSlice(self.allocator, "&client_secret=");
             const encoded_secret = try http.urlEncode(self.allocator, secret);
             defer self.allocator.free(encoded_secret);
-            try form_data.appendSlice(encoded_secret);
+            try form_data.appendSlice(self.allocator, encoded_secret);
         }
         
         // Make request
@@ -368,17 +368,17 @@ pub const Client = struct {
         }
         
         // Build form data
-        var form_data = std.ArrayList(u8).init(self.allocator);
-        defer form_data.deinit();
+        var form_data = std.ArrayList(u8){};
+        defer form_data.deinit(self.allocator);
         
-        try form_data.appendSlice("client_id=");
-        try form_data.appendSlice(self.config.client_id);
+        try form_data.appendSlice(self.allocator, "client_id=");
+        try form_data.appendSlice(self.allocator, self.config.client_id);
         
         if (scope) |s| {
-            try form_data.appendSlice("&scope=");
+            try form_data.appendSlice(self.allocator, "&scope=");
             const encoded_scope = try http.urlEncode(self.allocator, s);
             defer self.allocator.free(encoded_scope);
-            try form_data.appendSlice(encoded_scope);
+            try form_data.appendSlice(self.allocator, encoded_scope);
         }
         
         // Make request to device authorization endpoint
@@ -395,17 +395,17 @@ pub const Client = struct {
     /// Poll for device flow token
     pub fn pollDeviceToken(self: *const Client, device_code: []const u8) !TokenResponse {
         // Build form data
-        var form_data = std.ArrayList(u8).init(self.allocator);
-        defer form_data.deinit();
+        var form_data = std.ArrayList(u8){};
+        defer form_data.deinit(self.allocator);
         
-        try form_data.appendSlice("grant_type=");
-        try form_data.appendSlice(GrantType.device_code.toString());
-        try form_data.appendSlice("&device_code=");
+        try form_data.appendSlice(self.allocator, "grant_type=");
+        try form_data.appendSlice(self.allocator, GrantType.device_code.toString());
+        try form_data.appendSlice(self.allocator, "&device_code=");
         const encoded_device_code = try http.urlEncode(self.allocator, device_code);
         defer self.allocator.free(encoded_device_code);
-        try form_data.appendSlice(encoded_device_code);
-        try form_data.appendSlice("&client_id=");
-        try form_data.appendSlice(self.config.client_id);
+        try form_data.appendSlice(self.allocator, encoded_device_code);
+        try form_data.appendSlice(self.allocator, "&client_id=");
+        try form_data.appendSlice(self.allocator, self.config.client_id);
         
         // Make request
         var response = try self.http_client.postForm(self.config.token_endpoint, form_data.items);
@@ -430,28 +430,28 @@ pub const Client = struct {
         }
         
         // Build form data
-        var form_data = std.ArrayList(u8).init(self.allocator);
-        defer form_data.deinit();
+        var form_data = std.ArrayList(u8){};
+        defer form_data.deinit(self.allocator);
         
-        try form_data.appendSlice("token=");
+        try form_data.appendSlice(self.allocator, "token=");
         const encoded_token = try http.urlEncode(self.allocator, token);
         defer self.allocator.free(encoded_token);
-        try form_data.appendSlice(encoded_token);
-        try form_data.appendSlice("&client_id=");
-        try form_data.appendSlice(self.config.client_id);
+        try form_data.appendSlice(self.allocator, encoded_token);
+        try form_data.appendSlice(self.allocator, "&client_id=");
+        try form_data.appendSlice(self.allocator, self.config.client_id);
         
         if (self.config.client_secret) |secret| {
-            try form_data.appendSlice("&client_secret=");
+            try form_data.appendSlice(self.allocator, "&client_secret=");
             const encoded_secret = try http.urlEncode(self.allocator, secret);
             defer self.allocator.free(encoded_secret);
-            try form_data.appendSlice(encoded_secret);
+            try form_data.appendSlice(self.allocator, encoded_secret);
         }
         
         if (token_type_hint) |hint| {
-            try form_data.appendSlice("&token_type_hint=");
+            try form_data.appendSlice(self.allocator, "&token_type_hint=");
             const encoded_hint = try http.urlEncode(self.allocator, hint);
             defer self.allocator.free(encoded_hint);
-            try form_data.appendSlice(encoded_hint);
+            try form_data.appendSlice(self.allocator, encoded_hint);
         }
         
         // Make request
@@ -560,10 +560,10 @@ test "oauth2 authorization url building" {
     defer allocator.free(auth_url);
     
     // URL should contain required parameters
-    try testing.expect(std.mem.contains(u8, auth_url, "response_type=code"));
-    try testing.expect(std.mem.contains(u8, auth_url, "client_id=test_client"));
-    try testing.expect(std.mem.contains(u8, auth_url, "redirect_uri="));
-    try testing.expect(std.mem.contains(u8, auth_url, "code_challenge="));
-    try testing.expect(std.mem.contains(u8, auth_url, "code_challenge_method=S256"));
-    try testing.expect(std.mem.contains(u8, auth_url, "state="));
+    try testing.expect(std.mem.indexOf(u8, auth_url, "response_type=code") != null);
+    try testing.expect(std.mem.indexOf(u8, auth_url, "client_id=test_client") != null);
+    try testing.expect(std.mem.indexOf(u8, auth_url, "redirect_uri=") != null);
+    try testing.expect(std.mem.indexOf(u8, auth_url, "code_challenge=") != null);
+    try testing.expect(std.mem.indexOf(u8, auth_url, "code_challenge_method=S256") != null);
+    try testing.expect(std.mem.indexOf(u8, auth_url, "state=") != null);
 }

@@ -29,7 +29,7 @@ pub fn nowMillis() i64 {
 
 /// Get monotonic timestamp for internal timing (nanoseconds)
 pub fn monotonic() u64 {
-    return std.time.nanoTimestamp();
+    return @intCast(std.time.nanoTimestamp());
 }
 
 /// Check if a timestamp is valid within clock skew tolerance
@@ -135,7 +135,7 @@ pub fn parseIso8601(iso_string: []const u8) !Timestamp {
     // Convert to Unix timestamp (simplified calculation)
     // This is a basic implementation - in production you'd want more robust date handling
     const days_since_epoch = daysSinceEpoch(year, month, day);
-    const seconds_in_day = hour * 3600 + minute * 60 + second;
+    const seconds_in_day = @as(i64, hour) * 3600 + @as(i64, minute) * 60 + @as(i64, second);
     return @intCast(days_since_epoch * 86400 + seconds_in_day);
 }
 

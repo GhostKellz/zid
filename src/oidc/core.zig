@@ -164,7 +164,8 @@ pub const IdToken = struct {
         var iterator = self.custom_claims.iterator();
         while (iterator.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
-            entry.value_ptr.deinit();
+            // Note: std.json.Value doesn't have deinit in Zig 0.16
+            // Custom claims cleanup would need to be handled differently
         }
         self.custom_claims.deinit(self.allocator);
     }
@@ -239,7 +240,8 @@ pub const UserInfo = struct {
         var iterator = self.custom_claims.iterator();
         while (iterator.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
-            entry.value_ptr.deinit();
+            // Note: std.json.Value doesn't have deinit in Zig 0.16
+            // Custom claims cleanup would need to be handled differently
         }
         self.custom_claims.deinit(self.allocator);
     }
